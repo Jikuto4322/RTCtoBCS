@@ -14,23 +14,37 @@ generator client {
 //───────────────────────────────────────────────
 //  Supporting enums
 //───────────────────────────────────────────────
-enum ConversationType   { DIRECT SUPPORT_ROOM COMMUNITY }
-enum ParticipantRole    { CUSTOMER AGENT OWNER           }
-enum MessageContentType { TEXT  FILE  IMAGE  VIDEO  OTHER }
+enum ConversationType {
+  DIRECT
+  SUPPORT_ROOM
+  COMMUNITY
+}
+
+enum ParticipantRole {
+  CUSTOMER
+  AGENT
+  OWNER
+}
+
+enum MessageContentType {
+  TEXT
+  FILE
+  IMAGE
+  VIDEO
+  OTHER
+}
 
 //───────────────────────────────────────────────
 //  Existing top-level tables (minimal stubs)
 //───────────────────────────────────────────────
 model User {
-  id           BigInt       @id @default(autoincrement())
-  /* … the rest of your User columns … */
+  id           BigInt    @id @default(autoincrement())
   participants Participant[]
-  messages     Message[]    @relation("MessageSender")
+  messages     Message[] @relation("MessageSender")
 }
 
 model Business {
   id           BigInt       @id @default(autoincrement())
-  /* … the rest of your Business columns … */
   conversations Conversation[]
 }
 
