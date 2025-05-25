@@ -15,15 +15,13 @@ async function main() {
   const customer = await prisma.user.create({
     data: {
       // Add other required fields as needed
-      participants: {},
-      messages: {},
+      name: 'John Customer',
     },
   });
   const agent = await prisma.user.create({
     data: {
-      // Add other required fields as needed
-      participants: {},
-      messages: {},
+      // Add other required fields as needed'
+      name: 'Jane Agent',
     },
   });
 
