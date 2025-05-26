@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 interface Message {
   id: string;
@@ -19,59 +19,102 @@ interface Conversation {
   messages: Message[];
 }
 
-const API_URL = 'http://localhost:3000'; // Update if needed
+const API_URL = 'http://localhost:3000';
+
+const users = [
+  { id: '1', label: 'Customer' },
+  { id: '2', label: 'Agent' }
+];
 
 const ChatWidget: React.FC = () => {
+  const [loggedInUser, setLoggedInUser] = useState<{ id: string; label: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch initial conversation/messages
-  useEffect(() => {
-    async function fetchConversation() {
-      setLoading(true);
-      setError(null);
-      try {
-        // For demo: fetch the first conversation
-        const res = await fetch(`${API_URL}/conversations`);
-        const data: Conversation[] = await res.json();
-        if (data.length > 0) {
-          setMessages(data[0].messages);
-        }
-      } catch (e) {
-        setError('Failed to load messages');
-      } finally {
-        setLoading(false);
+  // Fetch conversation for the selected user
+  const fetchConversation = useCallback(async () => {
+    if (!loggedInUser) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/conversations?userId=${loggedInUser.id}`);
+      const data: Conversation[] = await res.json();
+      if (data.length > 0) {
+        setConversationId(data[0].id);
+        setMessages(data[0].messages);
+      } else {
+        setConversationId(null);
+        setMessages([]);
       }
+    } catch (e) {
+      setError('Failed to load messages');
+    } finally {
+      setLoading(false);
     }
-    fetchConversation();
-  }, []);
+  }, [loggedInUser]);
 
-  // Scroll to bottom on new message
+  useEffect(() => {
+    fetchConversation();
+  }, [loggedInUser, fetchConversation]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Handle sending a message (demo: just append locally)
   const handleSend = async () => {
-    if (!input.trim()) return;
-    // TODO: POST to /messages endpoint when implemented
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: (prev.length + 1).toString(),
-        senderId: 'me',
-        body: input,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-    setInput('');
+    if (!input.trim() || !loggedInUser || !conversationId) return;
+    try {
+      await fetch(`${API_URL}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          senderId: loggedInUser.id,
+          body: input,
+        }),
+      });
+      setInput('');
+      // Re-fetch messages after sending
+      fetchConversation();
+    } catch (e) {
+      setError('Failed to send message');
+    }
   };
 
+  // Login simulation UI
+  if (!loggedInUser) {
+    return (
+      <div style={{ maxWidth: 400, margin: '40px auto', padding: 24, border: '1px solid #ccc', borderRadius: 8, background: '#fff', textAlign: 'center' }}>
+        <h2>Login as:</h2>
+        {users.map(u => (
+          <button
+            key={u.id}
+            onClick={() => setLoggedInUser(u)}
+            style={{
+              margin: 8,
+              padding: '12px 24px',
+              borderRadius: 4,
+              background: '#0d6efd',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {u.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  // Chat UI
   return (
     <div style={{ maxWidth: 400, border: '1px solid #ccc', borderRadius: 8, padding: 16, background: '#fff', fontFamily: 'sans-serif' }}>
+      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Logged in as: {loggedInUser.label}</div>
       <div style={{ height: 300, overflowY: 'auto', marginBottom: 8, background: '#f9f9f9', borderRadius: 4, padding: 8 }}>
         {loading ? (
           <div>Loading...</div>
@@ -81,18 +124,18 @@ const ChatWidget: React.FC = () => {
           <div>No messages yet.</div>
         ) : (
           messages.map((msg) => (
-            <div key={msg.id} style={{ margin: '8px 0', textAlign: msg.senderId === 'me' ? 'right' : 'left' }}>
+            <div key={msg.id} style={{ margin: '8px 0', textAlign: msg.senderId === loggedInUser.id ? 'right' : 'left' }}>
               <span
                 style={{
                   display: 'inline-block',
-                  background: msg.senderId === 'me' ? '#d1e7dd' : '#e2e3e5',
+                  background: msg.senderId === loggedInUser.id ? '#d1e7dd' : '#e2e3e5',
                   color: '#222',
                   borderRadius: 16,
                   padding: '8px 12px',
                   maxWidth: '70%',
                   wordBreak: 'break-word',
                 }}
-                aria-label={msg.senderId === 'me' ? 'You' : 'Agent'}
+                aria-label={msg.senderId === loggedInUser.id ? 'You' : 'Other'}
               >
                 {msg.body}
               </span>

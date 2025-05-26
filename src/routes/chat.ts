@@ -29,14 +29,10 @@ export default async function (fastify: FastifyInstance) {
   });
 
   fastify.get('/conversations', async (request, reply) => {
-    // Optionally, filter by userId or businessId via query params
-    const { userId, businessId } = request.query as { userId?: string, businessId?: string };
+    const { userId } = request.query as { userId?: string };
     const where: any = {};
     if (userId) {
       where.participants = { some: { userId: BigInt(userId) } };
-    }
-    if (businessId) {
-      where.businessId = BigInt(businessId);
     }
     const conversations = await prisma.conversation.findMany({
       where,
@@ -63,4 +59,24 @@ export default async function (fastify: FastifyInstance) {
     }
     return serializeBigIntAndDate(conversations);
   });
+
+  fastify.post('/messages', async (request, reply) => {
+  const { conversationId, senderId, body } = request.body as {
+    conversationId: string;
+    senderId: string;
+    body: string;
+  };
+  const message = await prisma.message.create({
+    data: {
+      conversationId: BigInt(conversationId),
+      senderId: BigInt(senderId),
+      body,
+      contentType: 'TEXT',
+    },
+  });
+  // Serialize BigInt fields as needed
+  reply.send({ ...message, id: message.id.toString(), senderId: message.senderId?.toString() });
+});
 }
+
+
