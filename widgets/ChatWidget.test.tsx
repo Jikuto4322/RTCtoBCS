@@ -4,7 +4,7 @@ import ChatWidget from './ChatWidget';
 
 test('renders ChatWidget and sends a message', () => {
   render(<ChatWidget />);
-  const input = screen.getByPlaceholderText(/type a message/i);
+  const input = screen.getByPlaceholderText('Type a message...');
   fireEvent.change(input, { target: { value: 'Hello' } });
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
   expect(screen.getByText('Hello')).toBeInTheDocument();
