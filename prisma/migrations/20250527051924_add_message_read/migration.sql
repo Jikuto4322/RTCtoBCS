@@ -17,4 +17,4 @@ ALTER TABLE "MessageRead" ADD CONSTRAINT "MessageRead_messageId_fkey" FOREIGN KE
 -- AddForeignKey
 ALTER TABLE "MessageRead" ADD CONSTRAINT "MessageRead_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
-DELETE FROM "Message" WHERE "createdAt" IS NULL OR "createdAt" = '{}';
+DELETE FROM "Message" WHERE "createdAt" IS NULL;
