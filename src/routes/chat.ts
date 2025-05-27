@@ -61,22 +61,30 @@ export default async function (fastify: FastifyInstance) {
   });
 
   fastify.post('/messages', async (request, reply) => {
-  const { conversationId, senderId, body } = request.body as {
-    conversationId: string;
-    senderId: string;
-    body: string;
-  };
-  const message = await prisma.message.create({
-    data: {
-      conversationId: BigInt(conversationId),
-      senderId: BigInt(senderId),
-      body,
-      contentType: 'TEXT',
-    },
+    const { conversationId, senderId, body } = request.body as {
+      conversationId: string;
+      senderId: string;
+      body: string;
+    };
+
+    // Save the message to the database
+    const message = await prisma.message.create({
+      data: {
+        conversationId: BigInt(conversationId),
+        senderId: BigInt(senderId),
+        body,
+        contentType: 'TEXT',
+      },
+    });
+
+    // Return the message with BigInt fields as strings
+    reply.send({
+      ...message,
+      id: message.id.toString(),
+      senderId: message.senderId?.toString(),
+      conversationId: message.conversationId.toString(),
+    });
   });
-  // Serialize BigInt fields as needed
-  reply.send({ ...message, id: message.id.toString(), senderId: message.senderId?.toString() });
-});
 }
 
 
