@@ -34,6 +34,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       messages.map((msg) => (
         <div key={msg.id} style={{ margin: '8px 0', textAlign: msg.senderId === loggedInUserId ? 'right' : 'left' }}>
           <span
+            className="chat-message-bubble"
             style={{
               display: 'inline-block',
               background: msg.senderId === loggedInUserId ? '#d1e7dd' : '#e2e3e5',

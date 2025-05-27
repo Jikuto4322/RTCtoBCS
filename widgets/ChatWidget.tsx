@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import './ChatWidget.css';
 import ChatLogin from './ChatLogin';
 import ChatMessages from './ChatMessages';
 import ChatInput from './ChatInput';
+import ChatSidebar from './ChatSidebar';
 
 const API_URL = 'http://localhost:3000';
 const WS_URL = 'ws://localhost:3000/ws';
@@ -37,34 +39,34 @@ const ChatWidget: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Fetch conversation for the selected user
-  const fetchConversation = useCallback(async () => {
+  // Fetch conversations for the logged in user
+  const fetchConversations = useCallback(async () => {
     if (!loggedInUser) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`${API_URL}/conversations?userId=${loggedInUser.id}`);
       const data: Conversation[] = await res.json();
+      setConversations(data);
+      // Optionally select the first conversation by default
       if (data.length > 0) {
         setConversationId(data[0].id);
         setMessages(data[0].messages);
-      } else {
-        setConversationId(null);
-        setMessages([]);
       }
     } catch (e) {
-      setError('Failed to load messages');
+      setError('Failed to load conversations');
     } finally {
       setLoading(false);
     }
   }, [loggedInUser]);
 
   useEffect(() => {
-    fetchConversation();
-  }, [loggedInUser, fetchConversation]);
+    fetchConversations();
+  }, [loggedInUser, fetchConversations]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,8 +80,22 @@ const ChatWidget: React.FC = () => {
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'message' && msg.payload.conversationId === conversationId) {
-        setMessages((prev) => [...prev, msg.payload]);
+      if (msg.type === 'message') {
+        // 1. If this is the open conversation, append to messages
+        if (msg.payload.conversationId === conversationId) {
+          setMessages((prev) => [...prev, msg.payload]);
+        }
+        // 2. Update the conversations array so the sidebar and switching stay in sync
+        setConversations((prevConvs) =>
+          prevConvs.map((conv) =>
+            conv.id === msg.payload.conversationId
+              ? {
+                  ...conv,
+                  messages: [...conv.messages, msg.payload],
+                }
+              : conv
+          )
+        );
       }
     };
 
@@ -142,16 +158,28 @@ const ChatWidget: React.FC = () => {
   }
 
   return (
-    <div style={{ maxWidth: 400, border: '1px solid #ccc', borderRadius: 8, padding: 16, background: '#fff', fontFamily: 'sans-serif' }}>
-      <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Logged in as: {loggedInUser.label}</div>
-      <ChatMessages
-        messages={messages}
+    <div className="chat-widget-container">
+      <ChatSidebar
+        conversations={conversations}
+        selectedConversationId={conversationId}
+        onSelect={id => {
+          setConversationId(id);
+          const conv = conversations.find(c => c.id === id);
+          setMessages(conv ? conv.messages : []);
+        }}
         loggedInUserId={loggedInUser.id}
-        loading={loading}
-        error={error}
-        messagesEndRef={messagesEndRef}
       />
-      <ChatInput input={input} setInput={setInput} onSend={handleSend} />
+      <div className="chat-widget-main">
+        <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Logged in as: {loggedInUser.label}</div>
+        <ChatMessages
+          messages={messages}
+          loggedInUserId={loggedInUser.id}
+          loading={loading}
+          error={error}
+          messagesEndRef={messagesEndRef}
+        />
+        <ChatInput input={input} setInput={setInput} onSend={handleSend} />
+      </div>
     </div>
   );
 };
