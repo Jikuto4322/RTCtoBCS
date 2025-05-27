@@ -1,0 +1,30 @@
+/* ChatWidget.css */
+.chat-widget-container {
+  max-width: 700px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  color: #222;
+  display: flex;
+}
+
+.chat-widget-main {
+  flex: 1;
+  padding: 16px;
+  background: #fff;
+  color: #222;
+}
+
+/* Dark mode styles */
+@media (prefers-color-scheme: dark) {
+  .chat-widget-container,
+  .chat-widget-main {
+    background: #181a1b;
+    color: #f1f1f1;
+    border-color: #333;
+  }
+  .chat-message-bubble {
+    background: #23272a !important;
+    color: #f1f1f1 !important;
+  }
+}
