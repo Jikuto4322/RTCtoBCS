@@ -46,21 +46,24 @@ const ChatWidget: React.FC = () => {
   // Fetch conversations for the logged in user
   const fetchConversations = useCallback(async () => {
     if (!loggedInUser) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); // <-- Start loading
     try {
       const res = await fetch(`${API_URL}/conversations?userId=${loggedInUser.id}`);
-      const data: Conversation[] = await res.json();
+      const data = await res.json();
       setConversations(data);
-      // Optionally select the first conversation by default
+
       if (data.length > 0) {
-        setConversationId(data[0].id);
-        setMessages(data[0].messages);
+        const firstConv = data[0];
+        setConversationId(firstConv.id);
+        setMessages(firstConv.messages);
+      } else {
+        setConversationId(null);
+        setMessages([]);
       }
     } catch (e) {
       setError('Failed to load conversations');
     } finally {
-      setLoading(false);
+      setLoading(false); // <-- Stop loading
     }
   }, [loggedInUser]);
 
@@ -150,6 +153,11 @@ const ChatWidget: React.FC = () => {
         senderId: loggedInUser.id,
         body: input,
       }),
+    });
+    await fetch(`${API_URL}/conversations/${conversationId}/read`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: loggedInUser.id }),
     });
   };
 

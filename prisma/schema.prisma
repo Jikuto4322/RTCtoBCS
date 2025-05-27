@@ -42,6 +42,7 @@ model User {
   name         String
   participants Participant[]
   messages     Message[] @relation("MessageSender")
+  messageReads MessageRead[]
 }
 
 model Business {
@@ -101,6 +102,7 @@ model Message {
   deletedAt      DateTime?
 
   attachments    Attachment[]     // optional rich-media table (see below)
+  reads          MessageRead[]
 
   /// *Optimised for chronological fetches & sender filtering*
   @@index([conversationId, createdAt])
@@ -117,6 +119,19 @@ model Attachment {
   width       Int?
   height      Int?
   sizeBytes   Int?
+}
+
+model MessageRead {
+  id        BigInt   @id @default(autoincrement())
+  message   Message  @relation(fields: [messageId], references: [id])
+  messageId BigInt
+
+  user      User     @relation(fields: [userId], references: [id])
+  userId    BigInt
+
+  readAt    DateTime @default(now())
+
+  @@unique([messageId, userId]) // Prevent duplicate receipts
 }
 
 /*

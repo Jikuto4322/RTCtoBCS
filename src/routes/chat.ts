@@ -1,27 +1,31 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { clients } from '../sockets'; // Export clients set from sockets.ts
+import { convertBigInts } from '../utils/convertBigInts';
 
 const prisma = new PrismaClient();
 
 export default async function (fastify: FastifyInstance) {
   fastify.post('/conversations', async (request, reply) => {
-    const { customerId, businessId } = request.body as { customerId: bigint, businessId: bigint };
+    const { customerId, businessId } = request.body as { customerId: string, businessId: string };
     let conversation = await prisma.conversation.findFirst({
       where: {
-        businessId,
+        businessId: BigInt(businessId),
         participants: {
-          some: { userId: customerId }
+          some: { userId: BigInt(customerId) }
         }
       }
     });
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {
-          businessId,
+          businessId: BigInt(businessId), // <-- convert to BigInt here
           type: 'DIRECT',
           participants: {
-            create: [{ userId: customerId, role: 'CUSTOMER' }]
+            create: [
+              { userId: BigInt(customerId), role: 'CUSTOMER' },
+              { userId: BigInt(businessId), role: 'AGENT' }
+            ]
           }
         }
       });
@@ -31,34 +35,35 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.get('/conversations', async (request, reply) => {
     const { userId } = request.query as { userId?: string };
-    const where: any = {};
-    if (userId) {
-      where.participants = { some: { userId: BigInt(userId) } };
+
+    if (!userId) {
+      return reply.status(400).send({ error: 'Missing userId in query' });
     }
+
     const conversations = await prisma.conversation.findMany({
-      where,
-      include: { participants: true, messages: true }
-    });
-    // Convert BigInt and Date fields to string recursively
-    function serializeBigIntAndDate(obj: any): any {
-      if (Array.isArray(obj)) return obj.map(serializeBigIntAndDate);
-      if (obj && typeof obj === 'object') {
-        if (obj instanceof Date) return obj.toISOString();
-        const newObj: any = {};
-        for (const key in obj) {
-          if (typeof obj[key] === 'bigint') {
-            newObj[key] = obj[key].toString();
-          } else if (obj[key] instanceof Date) {
-            newObj[key] = obj[key].toISOString();
-          } else {
-            newObj[key] = serializeBigIntAndDate(obj[key]);
+      where: {
+        participants: { some: { userId: BigInt(userId) } }
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            reads: { where: { userId: BigInt(userId) } }
           }
-        }
-        return newObj;
+        },
+        participants: true
       }
-      return obj;
-    }
-    return serializeBigIntAndDate(conversations);
+    });
+
+    // Add unread count per conversation
+    const result = conversations.map(conv => {
+      const unreadCount = conv.messages.filter(
+        m => m.senderId !== BigInt(userId) && m.reads.length === 0
+      ).length;
+      return { ...conv, unreadCount };
+    });
+
+    reply.send(convertBigInts(result));
   });
 
   fastify.post('/messages', async (request, reply) => {
@@ -98,6 +103,36 @@ export default async function (fastify: FastifyInstance) {
       senderId: message.senderId?.toString(),
       conversationId: message.conversationId.toString(),
     });
+  });
+
+  // Mark all unread messages in a conversation as read for a user
+  fastify.post('/conversations/:conversationId/read', async (request, reply) => {
+    const { conversationId } = request.params as { conversationId: string };
+    const { userId } = request.body as { userId: string };
+
+    // Find all unread messages for this user in the conversation
+    const unreadMessages = await prisma.message.findMany({
+      where: {
+        conversationId: BigInt(conversationId),
+        senderId: { not: BigInt(userId) }, // don't mark own messages as unread
+        reads: { none: { userId: BigInt(userId) } }
+      },
+      select: { id: true }
+    });
+
+    // Create MessageRead records for each unread message
+    if (unreadMessages.length > 0) {
+      await prisma.messageRead.createMany({
+        data: unreadMessages.map(msg => ({
+          messageId: msg.id,
+          userId: BigInt(userId),
+          readAt: new Date()
+        })),
+        skipDuplicates: true
+      });
+    }
+
+    reply.send({ markedRead: unreadMessages.length });
   });
 }
 
