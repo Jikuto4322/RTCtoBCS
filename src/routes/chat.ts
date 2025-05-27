@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
+import { clients } from '../sockets'; // Export clients set from sockets.ts
 
 const prisma = new PrismaClient();
 
@@ -67,7 +68,6 @@ export default async function (fastify: FastifyInstance) {
       body: string;
     };
 
-    // Save the message to the database
     const message = await prisma.message.create({
       data: {
         conversationId: BigInt(conversationId),
@@ -77,7 +77,21 @@ export default async function (fastify: FastifyInstance) {
       },
     });
 
-    // Return the message with BigInt fields as strings
+    // Broadcast to all WebSocket clients
+    for (const client of clients) {
+      if (client.readyState === 1) { // 1 = OPEN
+        client.send(JSON.stringify({
+          type: 'message',
+          payload: {
+            ...message,
+            id: message.id.toString(),
+            senderId: message.senderId?.toString(),
+            conversationId: message.conversationId.toString(),
+          },
+        }));
+      }
+    }
+
     reply.send({
       ...message,
       id: message.id.toString(),

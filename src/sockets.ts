@@ -2,7 +2,7 @@ import { FastifyRequest } from 'fastify';
 import { RawData, WebSocket } from 'ws';
 
 // In-memory store for demo (replace with Redis/pubsub for production)
-const clients: Set<WebSocket> = new Set();
+export const clients: Set<WebSocket> = new Set();
 
 export function handleSocket(ws: WebSocket, req: FastifyRequest) {
   clients.add(ws);

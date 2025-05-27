@@ -1,5 +1,13 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
+const API_URL = 'http://localhost:3000';
+const WS_URL = 'ws://localhost:3000/ws'; // Use ws:// for local dev
+
+const users = [
+  { id: '1', label: 'Customer' },
+  { id: '2', label: 'Agent' }
+];
+
 interface Message {
   id: string;
   senderId: string;
@@ -19,13 +27,6 @@ interface Conversation {
   messages: Message[];
 }
 
-const API_URL = 'http://localhost:3000';
-
-const users = [
-  { id: '1', label: 'Customer' },
-  { id: '2', label: 'Agent' }
-];
-
 const ChatWidget: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<{ id: string; label: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -34,6 +35,7 @@ const ChatWidget: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // Fetch conversation for the selected user
   const fetchConversation = useCallback(async () => {
@@ -65,24 +67,71 @@ const ChatWidget: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Connect to WebSocket on login
+  useEffect(() => {
+    if (!loggedInUser) return;
+    const ws = new window.WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'message' && msg.payload.conversationId === conversationId) {
+        setMessages((prev) => [...prev, msg.payload]);
+      }
+    };
+
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [loggedInUser, conversationId]);
+
+  // Send message via WebSocket
   const handleSend = async () => {
-    if (!input.trim() || !loggedInUser || !conversationId) return;
-    try {
-      await fetch(`${API_URL}/messages`, {
+    if (!input.trim() || !loggedInUser) return;
+    let convId = conversationId;
+    if (!convId) {
+      // Create conversation
+      const res = await fetch(`${API_URL}/conversations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          conversationId,
-          senderId: loggedInUser.id,
-          body: input,
+          customerId: '1', // or loggedInUser.id
+          businessId: '2', // or the other user's id
         }),
       });
-      setInput('');
-      // Re-fetch messages after sending
-      fetchConversation();
-    } catch (e) {
-      setError('Failed to send message');
+      const data = await res.json();
+      convId = data.id;
+      setConversationId(convId);
     }
+    const ws = wsRef.current;
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: 'message',
+          payload: {
+            conversationId: convId,
+            senderId: loggedInUser.id,
+            body: input,
+            createdAt: new Date().toISOString(),
+          },
+        })
+      );
+      setInput('');
+    }
+    // Optionally, still POST to backend for persistence
+    await fetch(`${API_URL}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        conversationId: convId,
+        senderId: loggedInUser.id,
+        body: input,
+      }),
+    });
   };
 
   // Login simulation UI
