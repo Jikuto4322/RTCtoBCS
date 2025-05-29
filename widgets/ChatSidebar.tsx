@@ -17,15 +17,20 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   conversations,
   selectedConversationId,
   onSelect,
+  loggedInUserId,
 }) => (
   <div style={{ width: 220, borderRight: '1px solid #eee', padding: 8 }}>
     <h4>Chats</h4>
     {conversations.map(conv => {
-      // Only show the CUSTOMER participant(s) for this conversation
-      const customer = conv.participants.find(
-        p => p.role === 'CUSTOMER'
+      // Find the logged-in user's participant record
+      const me = conv.participants.find(p => p.userId === loggedInUserId);
+      // Find the "other" participant: if I'm CUSTOMER, show AGENT; if I'm AGENT, show CUSTOMER
+      const other = conv.participants.find(
+        p => p.userId !== loggedInUserId &&
+          ((me?.role === 'CUSTOMER' && p.role === 'AGENT') ||
+           (me?.role === 'AGENT' && p.role === 'CUSTOMER'))
       );
-      if (!customer) return null; // Skip if no customer in this conversation
+      if (!other) return null;
 
       return (
         <div
@@ -42,7 +47,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           }}
         >
           <div style={{ color: '#222' }}>
-            {customer.user?.name || customer.userId}
+            {other.user?.name || other.userId}
           </div>
           <div style={{ fontSize: 12, color: '#888' }}>
             {conv.messages.length > 0 ? conv.messages[conv.messages.length - 1].body : 'No messages'}
