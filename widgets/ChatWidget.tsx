@@ -8,11 +8,6 @@ import ChatSidebar from './ChatSidebar';
 const API_URL = 'http://localhost:3000';
 const WS_URL = 'ws://localhost:3000/ws';
 
-const users = [
-  { id: '1', label: 'Customer' },
-  { id: '2', label: 'Agent' }
-];
-
 interface Message {
   id: string;
   senderId: string;
@@ -162,7 +157,7 @@ const ChatWidget: React.FC = () => {
   };
 
   if (!loggedInUser) {
-    return <ChatLogin users={users} onLogin={setLoggedInUser} />;
+    return <ChatLogin onLogin={setLoggedInUser} />;
   }
 
   return (

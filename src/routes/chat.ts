@@ -35,35 +35,45 @@ export default async function (fastify: FastifyInstance) {
 
   fastify.get('/conversations', async (request, reply) => {
     const { userId } = request.query as { userId?: string };
-
     if (!userId) {
       return reply.status(400).send({ error: 'Missing userId in query' });
     }
 
+    // Find all conversations where the agent is a participant
     const conversations = await prisma.conversation.findMany({
       where: {
-        participants: { some: { userId: BigInt(userId) } }
+        participants: {
+          some: {
+            userId: BigInt(userId),
+            role: 'AGENT'
+          }
+        }
       },
       include: {
-        messages: {
-          orderBy: { createdAt: 'asc' },
-          include: {
-            reads: { where: { userId: BigInt(userId) } }
-          }
+        participants: {
+          include: { user: true }
         },
-        participants: true
+        messages: {
+          orderBy: { createdAt: 'asc' }
+        }
       }
     });
 
-    // Add unread count per conversation
-    const result = conversations.map(conv => {
-      const unreadCount = conv.messages.filter(
-        m => m.senderId !== BigInt(userId) && m.reads.length === 0
-      ).length;
-      return { ...conv, unreadCount };
-    });
+    // For each conversation, only include customers in the participants list
+    const result = conversations.map(conv => ({
+      ...conv,
+      customers: conv.participants
+        .filter(p => p.role === 'CUSTOMER')
+        .map(p => ({
+          id: p.user.id.toString(),
+          name: p.user.name,
+          email: p.user.email
+        })),
+      // Optionally, include messages or other fields as needed
+      messages: conv.messages
+    }));
 
-    reply.send(convertBigInts(result));
+    reply.send(result);
   });
 
   fastify.post('/messages', async (request, reply) => {
