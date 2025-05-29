@@ -20,7 +20,6 @@ const ChatWidget: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [typingUsers, setTypingUsers] = useState<{ id: string; label: string; conversationId: string }[]>([]);
   const [presenceUsers, setPresenceUsers] = useState<{ id: string; online: boolean }[]>([]);
-  const [wsReady, setWsReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -74,7 +73,6 @@ const ChatWidget: React.FC = () => {
       wsRef.current = ws;
 
       ws.onopen = () => {
-        setWsReady(true);
         reconnectAttempts = 0;
         // Send join for all conversations
         conversations.forEach(conv => {
@@ -144,7 +142,6 @@ const ChatWidget: React.FC = () => {
       };
 
       ws.onclose = () => {
-        setWsReady(false);
         wsRef.current = null;
         if (shouldReconnect) {
           reconnectAttempts++;
@@ -171,14 +168,13 @@ const ChatWidget: React.FC = () => {
 
     // Create a temporary message object for optimistic UI
     const newMessage = {
-      id: Date.now().toString(), // temporary id
+      id: Date.now().toString(),
       conversationId,
       senderId: loggedInUser.id,
       body: input,
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistically update conversations and messages
     setConversations(prevConvs =>
       prevConvs.map(conv =>
         conv.id === conversationId
@@ -190,7 +186,13 @@ const ChatWidget: React.FC = () => {
     setInput('');
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
 
-    // Send message via WebSocket
+    // Add this log:
+    console.log('Sending message to backend:', {
+      conversationId,
+      senderId: loggedInUser.id,
+      body: input,
+    });
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
@@ -217,9 +219,10 @@ const ChatWidget: React.FC = () => {
   };
 
   // Handle typing indication
-  const handleTyping = (value: string) => {
+  const handleTyping = () => {
     if (!loggedInUser || !conversationId) return;
     const ws = wsRef.current;
+    console.log('Sending typing event'); 
     if (ws && ws.readyState === ws.OPEN) {
       ws.send(
         JSON.stringify({

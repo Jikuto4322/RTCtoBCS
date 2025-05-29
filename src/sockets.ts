@@ -64,7 +64,7 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
     }
 
     if (msg.type === 'message') {
-      // Save message to DB
+      console.log('Saving message to DB:', msg.payload);
       const saved = await prisma.message.create({
         data: {
           conversationId: BigInt(msg.payload.conversationId),
@@ -76,6 +76,7 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
           sender: true, 
         },
       });
+      console.log('Message saved:', saved);
 
       // Broadcast to all users in the conversation
       connections
