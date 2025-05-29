@@ -38,7 +38,7 @@ export interface ChatMessagesProps {
 }
 
 export interface ChatLoginProps {
-  onLogin: (user: { id: string; label: string; token: string }) => void;
+  onLogin: (user: { id: string; label: string }, token: string) => void;
 }
 
 export interface ChatInputProps {
@@ -49,3 +49,11 @@ export interface ChatInputProps {
   conversationId: string | null;
   loggedInUser: { id: string; label: string } | null;
 }
+
+export type ChatSidebarProps = {
+  conversations: Conversation[];
+  selectedConversationId: string | null;
+  onSelect: (id: string) => void;
+  loggedInUserId: string;
+  presenceUsers: { id: string; online: boolean }[]; // ✅ CORRECT
+};

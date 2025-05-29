@@ -21,7 +21,11 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
       });
       const data = await res.json();
       if (res.ok) {
-        onLogin({ id: data.user.id, label: data.user.name, token: data.token });
+        // Pass both user and token to onLogin
+        onLogin(
+          { id: data.user.id, label: data.user.name },
+          data.token // JWT token
+        );
       } else {
         setError(data.error || 'Login failed');
       }

@@ -5,28 +5,33 @@ import ChatMessages from './ChatMessages';
 import ChatInput from './ChatInput';
 import ChatSidebar from './ChatSidebar';
 import ChatIsTyping from './ChatIsTyping';
-import type {Message, Conversation} from './types';
+import type { Message, Conversation } from './types';
 
 const API_URL = 'http://localhost:3000';
-const WS_URL = 'ws://localhost:3000/ws';
 
 const ChatWidget: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<{ id: string; label: string } | null>(null);
+  const [jwt, setJwt] = useState<string | null>(null); // <-- Add JWT state
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [typingUsers, setTypingUsers] = useState<{ id: string; label: string }[]>([]);
+  const [typingUsers, setTypingUsers] = useState<{ id: string; label: string; conversationId: string }[]>([]);
+  const [presenceUsers, setPresenceUsers] = useState<{ id: string; online: boolean }[]>([]);
+  const [wsReady, setWsReady] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const typingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const conversationIdRef = useRef<string | null>(null);
+  const loggedInUserRef = useRef<{ id: string; label: string } | null>(null);
 
   // Fetch conversations for the logged in user
   const fetchConversations = useCallback(async () => {
     if (!loggedInUser) return;
-    setLoading(true); 
+    setLoading(true);
     try {
       const res = await fetch(`${API_URL}/conversations?userId=${loggedInUser.id}`);
       const data = await res.json();
@@ -55,77 +60,135 @@ const ChatWidget: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Connect to WebSocket on login
+  // WebSocket connection & reconnection logic
   useEffect(() => {
-    if (!loggedInUser || !conversationId) return;
-    const ws = new window.WebSocket(WS_URL);
-    wsRef.current = ws;
+    if (!loggedInUser || !jwt) return; // <-- Only connect if jwt is set
 
-    ws.onopen = () => {
-      ws.send(
-        JSON.stringify({
-          type: 'join',
-          payload: {
-            userId: loggedInUser.id,
-            conversationId,
-          },
-        })
-      );
-    };
+    const WS_URL = `ws://localhost:3000/ws?token=${jwt}`;
+    let ws: WebSocket | null = null;
+    let reconnectAttempts = 0;
+    let shouldReconnect = true;
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'message') {
-        // Always update the conversations array for sidebar
-        setConversations((prevConvs) =>
-          prevConvs.map((conv) => {
-            if (conv.id === msg.payload.conversationId) {
-              // If not the currently open conversation, increment unreadCount
-              const isActive = msg.payload.conversationId === conversationId;
-              return {
-                ...conv,
-                messages: [...conv.messages, msg.payload],
-                unreadCount: isActive ? 0 : (conv.unreadCount || 0) + 1,
-              };
-            }
-            return conv;
-          })
-        );
-        // Only update messages if this is the open conversation
-        if (msg.payload.conversationId === conversationId) {
-          setMessages((prev) => [...prev, msg.payload]);
-        }
-      } else if (msg.type === 'typing') {
-        const { senderId, senderLabel, isTyping } = msg.payload;
-        console.log('typing event:', { senderId, loggedInUserId: loggedInUser.id, isTyping });
-        setTypingUsers((prev) => {
-          if (senderId === loggedInUser.id) return prev;
-          if (isTyping) {
-            if (!prev.find((user) => user.id === senderId)) {
-              return [...prev, { id: senderId, label: senderLabel }];
-            }
-            return prev;
-          } else {
-            return prev.filter((user) => user.id !== senderId);
-          }
+    const connect = () => {
+      ws = new window.WebSocket(WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setWsReady(true);
+        reconnectAttempts = 0;
+        // Send join for all conversations
+        conversations.forEach(conv => {
+          ws!.send(
+            JSON.stringify({
+              type: 'join',
+              payload: {
+                userId: loggedInUser.id,
+                conversationId: conv.id,
+              },
+            })
+          );
         });
-      }
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'message') {
+          setConversations(prevConvs =>
+            prevConvs.map(conv => {
+              if (conv.id === msg.payload.conversationId) {
+                const isActive = conversationIdRef.current === msg.payload.conversationId;
+                const isSender = msg.payload.senderId === loggedInUserRef.current?.id;
+                const alreadyExists = conv.messages.some(m => m.id === msg.payload.id);
+                // Remove optimistic message if it matches sender/body and has a temp id
+                const filteredMessages = conv.messages.filter(
+                  m =>
+                    !(
+                      m.senderId === msg.payload.senderId &&
+                      m.body === msg.payload.body &&
+                      m.id.length < 20 // crude check: temp ids are usually shorter than DB ids
+                    )
+                );
+                return {
+                  ...conv,
+                  messages: alreadyExists
+                    ? conv.messages
+                    : [...filteredMessages, msg.payload],
+                  unreadCount: isSender || isActive
+                    ? 0
+                    : (conv.unreadCount ?? 0) + (alreadyExists ? 0 : 1),
+                };
+              }
+              return conv;
+            })
+          );
+        } else if (msg.type === 'typing') {
+          const { senderId, senderLabel, isTyping } = msg.payload;
+          if (!loggedInUser) return;
+          setTypingUsers((prev) => {
+            // Remove any previous entry for this user in any conversation
+            const filtered = prev.filter((user) => user.id !== senderId);
+            if (isTyping) {
+              return [...filtered, { id: senderId, label: senderLabel, conversationId: msg.payload.conversationId }];
+            } else {
+              return filtered;
+            }
+          });
+        } else if (msg.type === 'presence') {
+          // msg.payload: { userId: string, online: boolean }
+          setPresenceUsers(prev => {
+            // Update or add the user's presence
+            const filtered = prev.filter(u => u.id !== msg.payload.userId);
+            return [...filtered, { id: msg.payload.userId, online: msg.payload.online }];
+          });
+        }
+      };
+
+      ws.onclose = () => {
+        setWsReady(false);
+        wsRef.current = null;
+        if (shouldReconnect) {
+          reconnectAttempts++;
+          const timeout = Math.min(1000 * 2 ** reconnectAttempts, 10000);
+          reconnectTimeout.current = setTimeout(connect, timeout);
+        }
+      };
     };
 
-    ws.onclose = () => {
-      wsRef.current = null;
-    };
+    connect();
 
     return () => {
-      ws.close();
+      shouldReconnect = false;
+      ws?.close();
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
+      if (typingTimeout.current) clearTimeout(typingTimeout.current);
     };
-  }, [loggedInUser, conversationId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedInUser, jwt, conversations.length]); // <-- Add jwt as dependency
 
   // Send message via WebSocket
   const handleSend = async () => {
-    if (!input.trim() || !loggedInUser) return;
+    if (!input.trim() || !loggedInUser || !conversationId) return;
 
-    // ...create conversation if needed...
+    // Create a temporary message object for optimistic UI
+    const newMessage = {
+      id: Date.now().toString(), // temporary id
+      conversationId,
+      senderId: loggedInUser.id,
+      body: input,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Optimistically update conversations and messages
+    setConversations(prevConvs =>
+      prevConvs.map(conv =>
+        conv.id === conversationId
+          ? { ...conv, messages: [...conv.messages, newMessage] }
+          : conv
+      )
+    );
+
+    setInput('');
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
 
     // Send message via WebSocket
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -136,18 +199,25 @@ const ChatWidget: React.FC = () => {
             conversationId,
             senderId: loggedInUser.id,
             body: input,
-            // add other fields as needed
+          },
+        })
+      );
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'typing',
+          payload: {
+            conversationId,
+            senderId: loggedInUser.id,
+            senderLabel: loggedInUser.label,
+            isTyping: false,
           },
         })
       );
     }
-
-    setInput('');
   };
 
   // Handle typing indication
   const handleTyping = (value: string) => {
-    console.log('handleTyping', { loggedInUser, conversationId, value });
     if (!loggedInUser || !conversationId) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === ws.OPEN) {
@@ -165,7 +235,7 @@ const ChatWidget: React.FC = () => {
     }
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
-      if (ws && ws.readyState === ws.OPEN && value.trim() === '') {
+      if (ws && ws.readyState === ws.OPEN) {
         ws.send(
           JSON.stringify({
             type: 'typing',
@@ -181,11 +251,46 @@ const ChatWidget: React.FC = () => {
     }, 1500);
   };
 
+  // Send join for new conversations (after initial connect)
+  useEffect(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !loggedInUser) return;
+    conversations.forEach(conv => {
+      wsRef.current!.send(
+        JSON.stringify({
+          type: 'join',
+          payload: {
+            userId: loggedInUser.id,
+            conversationId: conv.id,
+          },
+        })
+      );
+    });
+  }, [conversations, loggedInUser]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+    const conv = conversations.find(c => c.id === conversationId);
+    setMessages(conv ? conv.messages : []);
+  }, [conversations, conversationId]);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    loggedInUserRef.current = loggedInUser;
+  }, [loggedInUser]);
+
   if (!loggedInUser) {
-    return <ChatLogin onLogin={setLoggedInUser} />;
+    // Pass setJwt to ChatLogin so it can set the JWT after login
+    return <ChatLogin onLogin={(user, token) => { setLoggedInUser(user); setJwt(token); }} />;
   }
 
-  const otherTypingUsers = typingUsers.filter(u => u.id !== loggedInUser.id);
+  const otherTypingUsers = typingUsers
+    .filter(u => u.id !== loggedInUser.id && u.conversationId === conversationId);
 
   return (
     <div className="chat-widget-container">
@@ -196,7 +301,6 @@ const ChatWidget: React.FC = () => {
           setConversationId(id);
           const conv = conversations.find(c => c.id === id);
           setMessages(conv ? conv.messages : []);
-          // Reset unread count for this conversation
           setConversations(prevConvs =>
             prevConvs.map(conv =>
               conv.id === id ? { ...conv, unreadCount: 0 } : conv
@@ -204,6 +308,7 @@ const ChatWidget: React.FC = () => {
           );
         }}
         loggedInUserId={loggedInUser.id}
+        presenceUsers={presenceUsers}
       />
       <div className="chat-widget-main">
         <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Logged in as: {loggedInUser.label}</div>
