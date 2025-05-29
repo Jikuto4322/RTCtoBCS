@@ -35,7 +35,7 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
 
   return (
     <div style={{ maxWidth: 400, margin: '40px auto', padding: 24, border: '1px solid #ccc', borderRadius: 8, background: '#fff', textAlign: 'center' }}>
-      <h2>{isRegister ? 'Register' : 'Login'}</h2>
+      <h2 className="chat-login-heading">{isRegister ? 'Register' : 'Login'}</h2>
       <form onSubmit={handleSubmit}>
         {isRegister && (
           <input

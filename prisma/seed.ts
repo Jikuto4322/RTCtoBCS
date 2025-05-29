@@ -1,8 +1,13 @@
 import { PrismaClient, ConversationType, ParticipantRole, MessageContentType } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
+
+  const password = 'password123';
+  const passwordHash = await bcrypt.hash(password, 10);
+
   // Create Businesses
   const business1 = await prisma.business.create({
     data: { name: 'Acme Corp' },
@@ -16,21 +21,21 @@ async function main() {
     data: {
       name: 'John Customer',
       email: 'john.customer@gmail.com',
-      passwordHash: '$2b$10$eImiTMZG4T8YQ1z5a6Z5uO9f3F7j1k5z5a6Z5uO9f3F7j1k5z5a6Z5', // hashed password for 'password123'
+      passwordHash: passwordHash
     },
   });
   const customer2 = await prisma.user.create({
     data: {
       name: 'Alice Customer',
       email: 'alice.customer@gmail.com',
-      passwordHash: '$2b$10$eImiTMZG4T8YQ1z5a6Z5uO9f3F7j1k5z5a6Z5uO9f3F7j1k5z5a6Z5', // hashed password for 'password123'
+      passwordHash: passwordHash
     },
   });
   const agent = await prisma.user.create({
     data: {
       name: 'Jane Agent',
       email: 'jane.agent@gmail.com',
-      passwordHash: '$2b$10$eImiTMZG4T8YQ1z5a6Z5uO9f3F7j1k5z5a6Z5uO9f3F7j1k5z5a6Z5',
+      passwordHash: passwordHash
     },
   });
 

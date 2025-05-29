@@ -15,6 +15,17 @@
   color: #222;
 }
 
+/* Add this to your main CSS file or in a <style> tag */
+.chat-login-heading {
+  color: #fff; /* Default for light mode */
+}
+
+@media (prefers-color-scheme: dark) {
+  .chat-login-heading {
+    color: #222; /* White for dark mode */
+  }
+}
+
 /* Dark mode styles */
 @media (prefers-color-scheme: dark) {
   .chat-widget-container,
