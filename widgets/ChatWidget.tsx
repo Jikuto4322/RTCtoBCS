@@ -147,6 +147,7 @@ const ChatWidget: React.FC = () => {
 
   // Handle typing indication
   const handleTyping = (value: string) => {
+    console.log('handleTyping', { loggedInUser, conversationId, value });
     if (!loggedInUser || !conversationId) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === ws.OPEN) {
@@ -164,7 +165,6 @@ const ChatWidget: React.FC = () => {
     }
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
-      // Only send isTyping: false if input is empty
       if (ws && ws.readyState === ws.OPEN && value.trim() === '') {
         ws.send(
           JSON.stringify({

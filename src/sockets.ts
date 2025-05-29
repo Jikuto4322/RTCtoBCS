@@ -45,14 +45,15 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
         .filter(
           c =>
             c.conversationId === msg.payload.conversationId &&
-            c.userId !== msg.payload.userId
+            c.userId !== msg.payload.senderId // <-- use senderId here
         )
         .forEach(c => {
           c.socket.send(
             JSON.stringify({
               type: 'typing',
               payload: {
-                userId: msg.payload.userId,
+                senderId: msg.payload.senderId,         // <-- use senderId
+                senderLabel: msg.payload.senderLabel,   // <-- forward senderLabel if needed
                 isTyping: msg.payload.isTyping,
                 conversationId: msg.payload.conversationId,
               },
