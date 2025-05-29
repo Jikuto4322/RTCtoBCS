@@ -4,28 +4,11 @@ import ChatLogin from './ChatLogin';
 import ChatMessages from './ChatMessages';
 import ChatInput from './ChatInput';
 import ChatSidebar from './ChatSidebar';
+import ChatIsTyping from './ChatIsTyping';
+import type {Message, Conversation} from './types';
 
 const API_URL = 'http://localhost:3000';
 const WS_URL = 'ws://localhost:3000/ws';
-
-interface Message {
-  id: string;
-  senderId: string;
-  body: string;
-  createdAt: string;
-}
-
-interface Participant {
-  id: string;
-  userId: string;
-  role: string;
-}
-
-interface Conversation {
-  id: string;
-  participants: Participant[];
-  messages: Message[];
-}
 
 const ChatWidget: React.FC = () => {
   const [loggedInUser, setLoggedInUser] = useState<{ id: string; label: string } | null>(null);
@@ -35,13 +18,15 @@ const ChatWidget: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [typingUsers, setTypingUsers] = useState<{ id: string; label: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch conversations for the logged in user
   const fetchConversations = useCallback(async () => {
     if (!loggedInUser) return;
-    setLoading(true); // <-- Start loading
+    setLoading(true); 
     try {
       const res = await fetch(`${API_URL}/conversations?userId=${loggedInUser.id}`);
       const data = await res.json();
@@ -58,7 +43,7 @@ const ChatWidget: React.FC = () => {
     } catch (e) {
       setError('Failed to load conversations');
     } finally {
-      setLoading(false); // <-- Stop loading
+      setLoading(false);
     }
   }, [loggedInUser]);
 
@@ -72,28 +57,58 @@ const ChatWidget: React.FC = () => {
 
   // Connect to WebSocket on login
   useEffect(() => {
-    if (!loggedInUser) return;
+    if (!loggedInUser || !conversationId) return;
     const ws = new window.WebSocket(WS_URL);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          type: 'join',
+          payload: {
+            userId: loggedInUser.id,
+            conversationId,
+          },
+        })
+      );
+    };
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       if (msg.type === 'message') {
-        // 1. If this is the open conversation, append to messages
+        // Always update the conversations array for sidebar
+        setConversations((prevConvs) =>
+          prevConvs.map((conv) => {
+            if (conv.id === msg.payload.conversationId) {
+              // If not the currently open conversation, increment unreadCount
+              const isActive = msg.payload.conversationId === conversationId;
+              return {
+                ...conv,
+                messages: [...conv.messages, msg.payload],
+                unreadCount: isActive ? 0 : (conv.unreadCount || 0) + 1,
+              };
+            }
+            return conv;
+          })
+        );
+        // Only update messages if this is the open conversation
         if (msg.payload.conversationId === conversationId) {
           setMessages((prev) => [...prev, msg.payload]);
         }
-        // 2. Update the conversations array so the sidebar and switching stay in sync
-        setConversations((prevConvs) =>
-          prevConvs.map((conv) =>
-            conv.id === msg.payload.conversationId
-              ? {
-                  ...conv,
-                  messages: [...conv.messages, msg.payload],
-                }
-              : conv
-          )
-        );
+      } else if (msg.type === 'typing') {
+        const { senderId, senderLabel, isTyping } = msg.payload;
+        console.log('typing event:', { senderId, loggedInUserId: loggedInUser.id, isTyping });
+        setTypingUsers((prev) => {
+          if (senderId === loggedInUser.id) return prev;
+          if (isTyping) {
+            if (!prev.find((user) => user.id === senderId)) {
+              return [...prev, { id: senderId, label: senderLabel }];
+            }
+            return prev;
+          } else {
+            return prev.filter((user) => user.id !== senderId);
+          }
+        });
       }
     };
 
@@ -109,56 +124,68 @@ const ChatWidget: React.FC = () => {
   // Send message via WebSocket
   const handleSend = async () => {
     if (!input.trim() || !loggedInUser) return;
-    let convId = conversationId;
-    if (!convId) {
-      // Create conversation
-      const res = await fetch(`${API_URL}/conversations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerId: '1', // or loggedInUser.id
-          businessId: '2', // or the other user's id
-        }),
-      });
-      const data = await res.json();
-      convId = data.id;
-      setConversationId(convId);
+
+    // ...create conversation if needed...
+
+    // Send message via WebSocket
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({
+          type: 'message',
+          payload: {
+            conversationId,
+            senderId: loggedInUser.id,
+            body: input,
+            // add other fields as needed
+          },
+        })
+      );
     }
+
+    setInput('');
+  };
+
+  // Handle typing indication
+  const handleTyping = (value: string) => {
+    if (!loggedInUser || !conversationId) return;
     const ws = wsRef.current;
     if (ws && ws.readyState === ws.OPEN) {
       ws.send(
         JSON.stringify({
-          type: 'message',
+          type: 'typing',
           payload: {
-            conversationId: convId,
+            conversationId,
             senderId: loggedInUser.id,
-            body: input,
-            createdAt: new Date().toISOString(),
+            senderLabel: loggedInUser.label,
+            isTyping: true,
           },
         })
       );
-      setInput('');
     }
-    // Optionally, still POST to backend for persistence
-    await fetch(`${API_URL}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        conversationId: convId,
-        senderId: loggedInUser.id,
-        body: input,
-      }),
-    });
-    await fetch(`${API_URL}/conversations/${conversationId}/read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: loggedInUser.id }),
-    });
+    if (typingTimeout.current) clearTimeout(typingTimeout.current);
+    typingTimeout.current = setTimeout(() => {
+      // Only send isTyping: false if input is empty
+      if (ws && ws.readyState === ws.OPEN && value.trim() === '') {
+        ws.send(
+          JSON.stringify({
+            type: 'typing',
+            payload: {
+              conversationId,
+              senderId: loggedInUser.id,
+              senderLabel: loggedInUser.label,
+              isTyping: false,
+            },
+          })
+        );
+      }
+    }, 1500);
   };
 
   if (!loggedInUser) {
     return <ChatLogin onLogin={setLoggedInUser} />;
   }
+
+  const otherTypingUsers = typingUsers.filter(u => u.id !== loggedInUser.id);
 
   return (
     <div className="chat-widget-container">
@@ -169,6 +196,12 @@ const ChatWidget: React.FC = () => {
           setConversationId(id);
           const conv = conversations.find(c => c.id === id);
           setMessages(conv ? conv.messages : []);
+          // Reset unread count for this conversation
+          setConversations(prevConvs =>
+            prevConvs.map(conv =>
+              conv.id === id ? { ...conv, unreadCount: 0 } : conv
+            )
+          );
         }}
         loggedInUserId={loggedInUser.id}
       />
@@ -181,7 +214,17 @@ const ChatWidget: React.FC = () => {
           error={error}
           messagesEndRef={messagesEndRef}
         />
-        <ChatInput input={input} setInput={setInput} onSend={handleSend} />
+        {otherTypingUsers.length > 0 && (
+          <ChatIsTyping typingUsers={otherTypingUsers.map(u => u.label)} />
+        )}
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          onSend={handleSend}
+          onTyping={handleTyping}
+          conversationId={conversationId}
+          loggedInUser={loggedInUser}
+        />
       </div>
     </div>
   );

@@ -1,10 +1,5 @@
 import React from 'react';
-
-interface Conversation {
-  id: string;
-  participants: { id: string; userId: string; role: string; user?: { name?: string; email?: string } }[];
-  messages: { id: string; body: string }[];
-}
+import type { Conversation } from './types';
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -22,20 +17,13 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   <div style={{ width: 220, borderRight: '1px solid #eee', padding: 8 }}>
     <h4>Chats</h4>
     {conversations.map(conv => {
-      // Find the logged-in user's participant record
-      const me = conv.participants.find(p => p.userId === loggedInUserId);
-      // Find the "other" participant: if I'm CUSTOMER, show AGENT; if I'm AGENT, show CUSTOMER
-      const other = conv.participants.find(
-        p => p.userId !== loggedInUserId &&
-          ((me?.role === 'CUSTOMER' && p.role === 'AGENT') ||
-           (me?.role === 'AGENT' && p.role === 'CUSTOMER'))
-      );
-      if (!other) return null;
-
+      const otherParticipant = conv.participants.find(p => p.userId !== loggedInUserId);
+      const lastMessage = conv.messages[conv.messages.length - 1];
       return (
         <div
           key={conv.id}
           onClick={() => onSelect(conv.id)}
+          className={`sidebar-conv${conv.id === selectedConversationId ? ' selected' : ''}`}
           style={{
             padding: 8,
             cursor: 'pointer',
@@ -47,11 +35,14 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           }}
         >
           <div style={{ color: '#222' }}>
-            {other.user?.name || other.userId}
+            {otherParticipant?.user?.name || otherParticipant?.userId}
           </div>
           <div style={{ fontSize: 12, color: '#888' }}>
-            {conv.messages.length > 0 ? conv.messages[conv.messages.length - 1].body : 'No messages'}
+            {lastMessage ? lastMessage.body : ''}
           </div>
+          {(conv.unreadCount ?? 0) > 0 && (
+            <span className="unread-badge">{conv.unreadCount}</span>
+          )}
         </div>
       );
     })}

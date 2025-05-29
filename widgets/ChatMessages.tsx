@@ -1,20 +1,5 @@
 import React from 'react';
-import type { RefObject } from 'react';
-
-interface Message {
-  id: string;
-  senderId: string;
-  body: string;
-  createdAt: string;
-}
-
-interface ChatMessagesProps {
-  messages: Message[];
-  loggedInUserId: string;
-  loading: boolean;
-  error: string | null;
-  messagesEndRef: RefObject<HTMLDivElement | null>;
-}
+import type { ChatMessagesProps } from './types'; // Adjust the import path as necessary
 
 const ChatMessages: React.FC<ChatMessagesProps> = ({
   messages,

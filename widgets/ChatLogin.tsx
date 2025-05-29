@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
-
-interface ChatLoginProps {
-  onLogin: (user: { id: string; label: string; token: string }) => void;
-}
+import type { ChatLoginProps } from './types';
 
 const API_URL = 'http://localhost:3000';
 
