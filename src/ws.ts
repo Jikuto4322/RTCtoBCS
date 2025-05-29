@@ -5,7 +5,7 @@ import { handleSocket } from './sockets';
 export default async function (fastify: FastifyInstance) {
   await fastify.register(websocket);
 
-  fastify.get('/ws', { websocket: true }, (connection, req) => {
-    handleSocket(connection, req);
+  fastify.get('/ws', { websocket: true }, (socket, req) => {
+    handleSocket({ socket }, req);
   });
 }
