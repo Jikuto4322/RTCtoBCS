@@ -21,7 +21,6 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
       });
       const data = await res.json();
       if (res.ok) {
-        // Pass both user and token to onLogin
         onLogin(
           { id: data.user.id, label: data.user.name },
           data.token // JWT token
@@ -37,7 +36,7 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
   return (
     <div style={{ maxWidth: 400, margin: '40px auto', padding: 24, border: '1px solid #ccc', borderRadius: 8, background: '#fff', textAlign: 'center' }}>
       <h2 className="chat-login-heading">{isRegister ? 'Register' : 'Login'}</h2>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} aria-label={isRegister ? 'Register form' : 'Login form'}>
         {isRegister && (
           <input
             placeholder="Name"
@@ -45,6 +44,7 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
             onChange={e => setName(e.target.value)}
             required
             style={{ margin: 8, padding: 8, width: '90%' }}
+            aria-label="Name"
           />
         )}
         <input
@@ -53,6 +53,7 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
           onChange={e => setEmail(e.target.value)}
           required
           style={{ margin: 8, padding: 8, width: '90%' }}
+          aria-label="Email"
         />
         <input
           placeholder="Password"
@@ -61,15 +62,24 @@ const ChatLogin: React.FC<ChatLoginProps> = ({ onLogin }) => {
           onChange={e => setPassword(e.target.value)}
           required
           style={{ margin: 8, padding: 8, width: '90%' }}
+          aria-label="Password"
         />
         <button type="submit" style={{ margin: 8, padding: '12px 24px', borderRadius: 4, background: '#0d6efd', color: '#fff', border: 'none', cursor: 'pointer' }}>
           {isRegister ? 'Register' : 'Login'}
         </button>
       </form>
-      <button onClick={() => setIsRegister(r => !r)} style={{ background: 'none', border: 'none', color: '#0d6efd', cursor: 'pointer' }}>
+      <button
+        onClick={() => setIsRegister(r => !r)}
+        style={{ background: 'none', border: 'none', color: '#0d6efd', cursor: 'pointer' }}
+        aria-label={isRegister ? 'Switch to login' : 'Switch to register'}
+      >
         {isRegister ? 'Already have an account? Login' : "Don't have an account? Register"}
       </button>
-      {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
+      {error && (
+        <div style={{ color: 'red', marginTop: 8 }} aria-live="polite" role="alert">
+          {error}
+        </div>
+      )}
     </div>
   );
 };

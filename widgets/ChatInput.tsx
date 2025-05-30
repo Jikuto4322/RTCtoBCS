@@ -13,6 +13,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
       onSend();
     }}
     style={{ display: 'flex', gap: 8 }}
+    role="search" // helps screen readers know this is an input area
+    aria-label="Type and send a message"
   >
     <input
       type="text"
@@ -23,8 +25,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }}
       style={{ flex: 1 }}
       placeholder="Type a message..."
+      aria-label="Message input"
+      autoComplete="off"
     />
-    <button type="submit">Send</button>
+    <button type="submit" aria-label="Send message">
+      Send
+    </button>
   </form>
 );
 

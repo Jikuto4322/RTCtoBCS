@@ -63,12 +63,13 @@ const ChatWidget: React.FC = () => {
   useEffect(() => {
     if (!loggedInUser || !jwt) return; // <-- Only connect if jwt is set
 
-    const WS_URL = `ws://localhost:3000/ws?token=${jwt}`;
+    const WS_URL = jwt ? `ws://localhost:3000/ws?token=${jwt}` : null;
     let ws: WebSocket | null = null;
     let reconnectAttempts = 0;
     let shouldReconnect = true;
 
     const connect = () => {
+      if (!WS_URL) return;
       ws = new window.WebSocket(WS_URL);
       wsRef.current = ws;
 
@@ -197,11 +198,12 @@ const ChatWidget: React.FC = () => {
       wsRef.current.send(
         JSON.stringify({
           type: 'message',
-          payload: {
-            conversationId,
-            senderId: loggedInUser.id,
-            body: input,
-          },
+          payload:
+            {
+              conversationId,
+              senderId: loggedInUser.id,
+              body: input,
+            },
         })
       );
       wsRef.current.send(
@@ -313,17 +315,27 @@ const ChatWidget: React.FC = () => {
         loggedInUserId={loggedInUser.id}
         presenceUsers={presenceUsers}
       />
-      <div className="chat-widget-main">
+      <main className="chat-widget-main" role="main" aria-label="Chat area">
         <div style={{ marginBottom: 8, fontWeight: 'bold' }}>Logged in as: {loggedInUser.label}</div>
-        <ChatMessages
-          messages={messages}
-          loggedInUserId={loggedInUser.id}
-          loading={loading}
-          error={error}
-          messagesEndRef={messagesEndRef}
-        />
+        <div
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          style={{ flex: 1, overflowY: 'auto', maxHeight: 400 }}
+          tabIndex={0}
+        >
+          <ChatMessages
+            messages={messages}
+            loggedInUserId={loggedInUser.id}
+            loading={loading}
+            error={error}
+            messagesEndRef={messagesEndRef}
+          />
+        </div>
         {otherTypingUsers.length > 0 && (
-          <ChatIsTyping typingUsers={otherTypingUsers.map(u => u.label)} />
+          <div aria-live="polite">
+            <ChatIsTyping typingUsers={otherTypingUsers.map(u => u.label)} />
+          </div>
         )}
         <ChatInput
           input={input}
@@ -333,7 +345,7 @@ const ChatWidget: React.FC = () => {
           conversationId={conversationId}
           loggedInUser={loggedInUser}
         />
-      </div>
+      </main>
     </div>
   );
 };

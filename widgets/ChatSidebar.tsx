@@ -19,7 +19,14 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         <div
           key={conv.id}
           onClick={() => onSelect(conv.id)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') onSelect(conv.id);
+          }}
           className={`sidebar-conv${conv.id === selectedConversationId ? ' selected' : ''}`}
+          tabIndex={0}
+          role="button"
+          aria-pressed={conv.id === selectedConversationId}
+          aria-label={`Open chat with ${otherParticipant?.user?.name || otherParticipant?.userId}${(conv.unreadCount ?? 0) > 0 ? `, ${conv.unreadCount} unread messages` : ''}`}
           style={{
             padding: 8,
             cursor: 'pointer',
@@ -31,6 +38,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: 8,
+            outline: 'none',
           }}
         >
           {/* Presence dot */}
@@ -58,8 +66,26 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
               {lastMessage ? lastMessage.body : ''}
             </div>
           </div>
+          {/* Unread badge */}
           {(conv.unreadCount ?? 0) > 0 && (
-            <span className="unread-badge">{conv.unreadCount}</span>
+            <span
+              className="unread-badge"
+              style={{
+                background: '#e53935',
+                color: '#fff',
+                borderRadius: '999px',
+                padding: '2px 8px',
+                fontSize: 12,
+                fontWeight: 'bold',
+                marginLeft: 8,
+                minWidth: 20,
+                textAlign: 'center',
+                display: 'inline-block',
+              }}
+              title={`${conv.unreadCount ?? 0} unread message${(conv.unreadCount ?? 0) > 1 ? 's' : ''}`}
+            >
+              {conv.unreadCount ?? 0}
+            </span>
           )}
         </div>
       );

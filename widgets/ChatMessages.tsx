@@ -1,44 +1,45 @@
 import React from 'react';
-import type { ChatMessagesProps } from './types'; // Adjust the import path as necessary
+import type { Message } from './types';
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({
-  messages,
-  loggedInUserId,
-  loading,
-  error,
-  messagesEndRef,
-}) => (
-  <div style={{ height: 300, overflowY: 'auto', marginBottom: 8, background: '#f9f9f9', borderRadius: 4, padding: 8 }}>
-    {loading ? (
-      <div>Loading...</div>
-    ) : error ? (
-      <div style={{ color: 'red' }}>{error}</div>
-    ) : messages.length === 0 ? (
-      <div>No messages yet.</div>
-    ) : (
-      messages.map((msg) => (
-        <div key={msg.id} style={{ margin: '8px 0', textAlign: msg.senderId === loggedInUserId ? 'right' : 'left' }}>
-          <span
-            className="chat-message-bubble"
-            style={{
-              display: 'inline-block',
-              background: msg.senderId === loggedInUserId ? '#d1e7dd' : '#e2e3e5',
-              color: '#222',
-              borderRadius: 16,
-              padding: '8px 12px',
-              maxWidth: '70%',
-              wordBreak: 'break-word',
-            }}
-            aria-label={msg.senderId === loggedInUserId ? 'You' : 'Other'}
-          >
-            {msg.body}
-          </span>
-          <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
-            {new Date(msg.createdAt).toLocaleTimeString()}
-          </div>
-        </div>
-      ))
-    )}
+const ChatMessages: React.FC<{
+  messages: Message[];
+  loggedInUserId: string;
+  loading?: boolean;
+  error?: string | null;
+  messagesEndRef?: React.RefObject<HTMLDivElement | null>;
+}> = ({ messages, loggedInUserId, loading, error, messagesEndRef }) => (
+  <div
+    role="log"
+    aria-live="polite"
+    aria-relevant="additions"
+    style={{ flex: 1, overflowY: 'auto', maxHeight: 400 }}
+    tabIndex={0}
+  >
+    {loading && <div>Loading...</div>}
+    {error && <div role="alert" style={{ color: 'red' }}>{error}</div>}
+    {messages.map(msg => (
+      <div
+        key={msg.id}
+        aria-label={`${msg.senderId === loggedInUserId ? 'You' : msg.senderId}: ${msg.body}`}
+        style={{
+          textAlign: msg.senderId === loggedInUserId ? 'right' : 'left',
+          margin: '4px 0',
+        }}
+      >
+        <span
+          style={{
+            display: 'inline-block',
+            background: msg.senderId === loggedInUserId ? '#d1eaff' : '#eee',
+            borderRadius: 12,
+            padding: '6px 12px',
+            maxWidth: '70%',
+            wordBreak: 'break-word',
+          }}
+        >
+          {msg.body}
+        </span>
+      </div>
+    ))}
     <div ref={messagesEndRef} />
   </div>
 );
