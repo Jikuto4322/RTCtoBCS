@@ -1,15 +1,35 @@
+version: '3.8'
+
 services:
-  db:
-    image: postgres:16
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      # ...other env vars...
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:15
     restart: always
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: chatdb
+      POSTGRES_DB: rtc_bcs
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"
 
 volumes:
   pgdata:

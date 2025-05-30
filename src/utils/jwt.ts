@@ -9,3 +9,7 @@ export function signUserJwt(user: { id: string; name: string; email: string }) {
     { expiresIn: '7d' }
   );
 }
+
+export function verifyJWT(token: string) {
+  return jwt.verify(token, JWT_SECRET) as { id: string; name: string; email: string };
+}

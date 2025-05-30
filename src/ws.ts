@@ -3,11 +3,13 @@ import websocket from '@fastify/websocket';
 import { handleSocket } from './sockets';
 import jwt from 'jsonwebtoken';
 import { logInfo, logWarn, logError } from './utils/logger';
+import Redis from 'ioredis';
 
 // In-memory presence map (userId -> Set of sockets)
 const presenceMap = new Map<string, Set<any>>();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
 export default async function (fastify: FastifyInstance) {
   await fastify.register(websocket);

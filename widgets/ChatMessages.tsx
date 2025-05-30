@@ -29,7 +29,8 @@ const ChatMessages: React.FC<{
         <span
           style={{
             display: 'inline-block',
-            background: msg.senderId === loggedInUserId ? '#d1eaff' : '#eee',
+            background: msg.senderId === loggedInUserId ? '#90caf9' : '#eee', // darker blue for sent
+            color: '#222', // dark text for both
             borderRadius: 12,
             padding: '6px 12px',
             maxWidth: '70%',
