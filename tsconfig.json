@@ -7,7 +7,12 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "outDir": "dist",
-    "types": ["node"]
+    "jsx": "react-jsx",
+    "types": ["jest"]
   },
-  "include": ["src", "prisma"]
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../jest.setup.ts"
+  ]
 }

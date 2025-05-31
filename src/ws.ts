@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import { handleSocket } from './sockets';
 import jwt from 'jsonwebtoken';
@@ -10,6 +10,9 @@ const presenceMap = new Map<string, Set<any>>();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+// In-memory store for SSE clients
+const sseClients: { userId: string, res: FastifyReply }[] = [];
 
 export default async function (fastify: FastifyInstance) {
   await fastify.register(websocket);
@@ -79,11 +82,45 @@ export default async function (fastify: FastifyInstance) {
       logError(`WebSocket error for user ${userId}:`, err);
     });
   });
+
+  // --- SSE endpoint ---
+  fastify.get('/sse', async (req: FastifyRequest, res: FastifyReply) => {
+    const token = (req.query as any).token;
+    let userId: string | undefined;
+    if (token) {
+      try {
+        const payload = jwt.verify(token, JWT_SECRET) as any;
+        userId = payload.id;
+      } catch {
+        res.status(401).send('Invalid token');
+        return;
+      }
+    }
+    if (!userId) {
+      res.status(401).send('No userId');
+      return;
+    }
+
+    res.raw.setHeader('Content-Type', 'text/event-stream');
+    res.raw.setHeader('Cache-Control', 'no-cache');
+    res.raw.setHeader('Connection', 'keep-alive');
+    res.raw.flushHeaders();
+
+    // Add to SSE clients
+    sseClients.push({ userId, res });
+
+    // Remove on close
+    req.raw.on('close', () => {
+      const idx = sseClients.findIndex(c => c.userId === userId && c.res === res);
+      if (idx !== -1) sseClients.splice(idx, 1);
+    });
+  });
 }
 
-// Broadcast presence to all connected sockets
+// Broadcast presence to all connected sockets and SSE clients
 function broadcastPresence(userId: string, online: boolean) {
   logInfo(`Broadcasting presence: userId=${userId}, online=${online}`);
+  // WebSocket clients
   for (const sockets of presenceMap.values()) {
     for (const sock of sockets) {
       try {
@@ -98,4 +135,16 @@ function broadcastPresence(userId: string, online: boolean) {
       }
     }
   }
+  // SSE clients
+  broadcastSSE('presence', { userId, online });
+}
+
+// Helper to broadcast to all SSE clients
+function broadcastSSE(event: string, data: any, userId?: string) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(client => {
+    if (!userId || client.userId === userId) {
+      client.res.raw.write(payload);
+    }
+  });
 }

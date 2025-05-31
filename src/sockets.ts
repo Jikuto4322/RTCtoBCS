@@ -1,6 +1,7 @@
 import { FastifyRequest } from 'fastify';
 import { RawData, WebSocket } from 'ws';
 import { PrismaClient } from '@prisma/client';
+import Redis from 'ioredis';
 
 // In-memory store for demo (replace with Redis/pubsub for production)
 export const clients: Set<WebSocket> = new Set();
@@ -14,6 +15,25 @@ interface WSConnection {
 const connections: WSConnection[] = [];
 
 const prisma = new PrismaClient();
+
+const redisPub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const redisSub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+
+// Subscribe to all conversation channels
+redisSub.psubscribe('chat:conversation:*', (err, count) => {
+  if (err) console.error('Redis subscribe error:', err);
+});
+
+// When a message is published to a channel, forward to local clients
+redisSub.on('pmessage', (pattern, channel, message) => {
+  const [, , conversationId] = channel.split(':');
+  const msg = JSON.parse(message);
+  connections
+    .filter(c => c.conversationId === conversationId)
+    .forEach(c => {
+      c.socket.send(JSON.stringify(msg));
+    });
+});
 
 export function handleSocket(connection: { socket: WebSocket }, req: any) {
   let userId = '';
@@ -118,6 +138,15 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
             })
           );
         });
+
+      // Publish to Redis for all nodes
+      redisPub.publish(
+        `chat:conversation:${msg.payload.conversationId}`,
+        JSON.stringify({
+          type: 'message',
+          payload: { ...saved, ...msg.payload }
+        })
+      );
     }
   });
 

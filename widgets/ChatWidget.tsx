@@ -22,8 +22,8 @@ const ChatWidget: React.FC = () => {
   const [presenceUsers, setPresenceUsers] = useState<{ id: string; online: boolean }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const typingTimeout = useRef<NodeJS.Timeout | null>(null);
-  const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const loggedInUserRef = useRef<{ id: string; label: string } | null>(null);
 
