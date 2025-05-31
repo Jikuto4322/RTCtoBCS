@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import websocket from '@fastify/websocket';
+import fastifyWebsocket from '@fastify/websocket';
 import { handleSocket } from './sockets';
 import jwt from 'jsonwebtoken';
 import { logInfo, logWarn, logError } from './utils/logger';
@@ -15,7 +15,7 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 const sseClients: { userId: string, res: FastifyReply }[] = [];
 
 export default async function (fastify: FastifyInstance) {
-  await fastify.register(websocket);
+  await fastify.register(fastifyWebsocket);
 
   fastify.get('/ws', { websocket: true }, (socket, req) => {
     logInfo('Incoming WebSocket connection attempt');
