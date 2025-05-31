@@ -109,7 +109,7 @@ export default async function (fastify: FastifyInstance) {
     // Create MessageRead records for each unread message
     if (unreadMessages.length > 0) {
       await prisma.messageRead.createMany({
-        data: unreadMessages.map(msg => ({
+        data: unreadMessages.map((msg: UnreadMessage) => ({
           messageId: msg.id,
           userId: BigInt(userId),
           readAt: new Date()
@@ -121,5 +121,7 @@ export default async function (fastify: FastifyInstance) {
     reply.send({ markedRead: unreadMessages.length });
   });
 }
+
+type UnreadMessage = { id: bigint };
 
 

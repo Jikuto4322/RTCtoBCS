@@ -8,7 +8,6 @@ services:
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
-      # ...other env vars...
     depends_on:
       - postgres
       - redis
