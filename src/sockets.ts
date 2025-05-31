@@ -78,6 +78,26 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
       });
       console.log('Message saved:', saved);
 
+      // Find recipient(s) for the conversation
+      const recipientIds = await prisma.participant.findMany({
+        where: {
+          conversationId: BigInt(msg.payload.conversationId),
+          userId: { not: BigInt(msg.payload.senderId) },
+        },
+        select: { userId: true },
+      });
+
+      for (const recipient of recipientIds) {
+        // Check if recipient is online (presenceMap or your connection tracking)
+        const isOnline = connections.some(
+          c => c.userId === recipient.userId.toString()
+        );
+        if (!isOnline) {
+          // Trigger mock push/email
+          sendMockPushNotification(recipient.userId.toString(), msg.payload.body);
+        }
+      }
+
       // Broadcast to all users in the conversation
       connections
         .filter(c => c.conversationId === msg.payload.conversationId)
@@ -106,4 +126,10 @@ export function handleSocket(connection: { socket: WebSocket }, req: any) {
     const idx = connections.findIndex(c => c.socket === connection.socket);
     if (idx !== -1) connections.splice(idx, 1);
   });
+}
+
+// Mock push/email notification function
+function sendMockPushNotification(userId: string, message: string) {
+  // In production, this would call an email or push service
+  console.log(`[MOCK PUSH] Would notify user ${userId}: "${message}"`);
 }
